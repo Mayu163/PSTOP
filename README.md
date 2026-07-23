@@ -22,22 +22,6 @@ Pstop currently displays:
 Pstop is intentionally read-only. It does not terminate processes or mutate
 Windows services.
 
-## Why Kotlin
-
-The project evaluated Kotlin and C++ against the target environment:
-
-| Criterion | Kotlin/JVM | C++ |
-| --- | --- | --- |
-| Installed compiler | Not initially installed | Not initially installed |
-| Windows metric access | OSHI provides tested Windows adapters | Direct PDH/NT API implementation required |
-| Terminal handling | JLine supports Windows VTP and raw input | Direct console mode and input parsing required |
-| Portable build | Repo-local JDK and Gradle | MSVC/LLVM, SDK, CMake/Ninja needed |
-| Automated tests | Lightweight JUnit/Kotlin tests | Test framework and native dependencies needed |
-
-Kotlin provides the shortest path to broad metrics, interactive input, and a
-repeatable test suite. The build scripts keep the downloaded JDK, Gradle,
-dependency cache, packages, and generated files inside this repository.
-
 ## Requirements
 
 - Windows 11
