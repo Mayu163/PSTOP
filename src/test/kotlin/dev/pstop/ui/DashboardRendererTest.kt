@@ -125,6 +125,36 @@ class DashboardRendererTest {
     }
 
     @Test
+    fun `renders lower panels from the top when cpu is hidden`() {
+        val output = TerminalApplication.renderPlainSnapshot(
+            snapshot(),
+            130,
+            41,
+            ViewState(visiblePanels = setOf(2, 3, 4)),
+        )
+        val lines = output.lines().dropLastWhile(String::isEmpty)
+
+        assertTrue("1 cpu" !in output)
+        assertContains(lines[0], "2 mem")
+        assertContains(lines[0], "disks")
+        assertContains(lines[0], "powershell.exe")
+    }
+
+    @Test
+    fun `process list replaces hidden detail area`() {
+        val output = TerminalApplication.renderPlainSnapshot(
+            snapshot(),
+            130,
+            41,
+            ViewState(showDetails = false),
+        )
+        val lines = output.lines().dropLastWhile(String::isEmpty)
+
+        assertTrue("Status:" !in output)
+        assertContains(lines[13], "4 proc")
+    }
+
+    @Test
     fun `sorts processes by requested field`() {
         val processes = snapshot().processes
 

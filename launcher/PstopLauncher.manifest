@@ -3,7 +3,7 @@
   <assemblyIdentity
     name="Pstop.Standalone"
     processorArchitecture="amd64"
-    version="1.0.3.0"
+    version="1.0.4.0"
     type="win32" />
   <description>Pstop Windows resource monitor</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">

@@ -117,15 +117,22 @@ Interactive keys:
 
 | Key | Action |
 | --- | --- |
-| `q`, `Esc` | Quit |
+| `q`, `Esc`, `Ctrl+C` | Quit cleanly |
 | `Up`, `Down` | Select a process |
+| `Left`, `Right` | Ignored to prevent accidental actions |
 | `Page Up`, `Page Down` | Move one page |
 | `Enter` | Toggle selected-process details |
 | `s` | Cycle CPU, memory, PID, and name sorting |
 | `r` | Reverse process sorting |
 | `p` | Pause/resume metric sampling |
-| `1`-`4` | Toggle panels |
+| `1` | Toggle the CPU panel |
+| `2` | Toggle the memory and disks panels |
+| `3` | Toggle the network panel |
+| `4` | Toggle the process area |
 | `h`, `?` | Toggle help |
+
+When a panel is hidden, the remaining non-CPU panels automatically expand to
+use the available terminal space. The CPU panel keeps its reference proportion.
 
 ## Repository layout
 

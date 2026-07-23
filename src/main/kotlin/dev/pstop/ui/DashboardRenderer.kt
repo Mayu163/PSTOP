@@ -28,7 +28,14 @@ data class ViewState(
     val showHelp: Boolean = false,
     val showDetails: Boolean = true,
     val visiblePanels: Set<Int> = setOf(1, 2, 3, 4),
-)
+) {
+    fun togglePanel(panel: Int): ViewState {
+        require(panel in 1..4) { "panel must be between 1 and 4" }
+        val updatedPanels = visiblePanels.toMutableSet()
+        if (!updatedPanels.add(panel)) updatedPanels.remove(panel)
+        return copy(visiblePanels = updatedPanels)
+    }
+}
 
 class DashboardRenderer(private val theme: Theme) {
     private val cpuHistory = History(HISTORY_CAPACITY)
@@ -47,50 +54,13 @@ class DashboardRenderer(private val theme: Theme) {
         networkDownloadHistory.add(snapshot.network?.downloadBytesPerSecond ?: 0L)
         networkUploadHistory.add(snapshot.network?.uploadBytesPerSecond ?: 0L)
 
-        val cpuHeight = (height * CPU_HEIGHT_RATIO).roundToInt()
-            .coerceIn(MINIMUM_CPU_HEIGHT, height - MINIMUM_LOWER_HEIGHT)
-        val lowerHeight = height - cpuHeight
-        val leftWidth = (width * LEFT_WIDTH_RATIO).roundToInt()
-            .coerceIn(MINIMUM_LEFT_WIDTH, width - MINIMUM_RIGHT_WIDTH)
-        val rightWidth = width - leftWidth
-        val leftTopHeight = (lowerHeight * LEFT_TOP_HEIGHT_RATIO).roundToInt()
-            .coerceIn(MINIMUM_LEFT_TOP_HEIGHT, lowerHeight - MINIMUM_NETWORK_HEIGHT + 1)
-        val memoryWidth = (leftWidth * MEMORY_WIDTH_RATIO).roundToInt()
-            .coerceIn(MINIMUM_MEMORY_WIDTH, leftWidth - MINIMUM_DISK_WIDTH)
-        val detailHeight = if (state.showDetails) {
-            (lowerHeight * DETAIL_HEIGHT_RATIO).roundToInt()
-                .coerceIn(MINIMUM_DETAIL_HEIGHT, lowerHeight - MINIMUM_PROCESS_HEIGHT + 1)
-        } else {
-            1
-        }
-
-        val cpuRect = Rect(0, 0, width, cpuHeight)
-        val memoryRect = Rect(0, cpuHeight - 1, memoryWidth, leftTopHeight + 1)
-        val diskRect = Rect(memoryWidth - 1, cpuHeight - 1, leftWidth - memoryWidth + 2, leftTopHeight + 1)
-        val networkRect = Rect(
-            0,
-            cpuHeight + leftTopHeight - 1,
-            leftWidth + 1,
-            lowerHeight - leftTopHeight + 1,
-        )
-        val detailRect = Rect(leftWidth, cpuHeight - 1, rightWidth, detailHeight + 1)
-        val processRect = Rect(
-            leftWidth,
-            cpuHeight + detailHeight - 1,
-            rightWidth,
-            lowerHeight - detailHeight + 1,
-        )
-
-        if (1 in state.visiblePanels) drawCpu(canvas, cpuRect, snapshot, state)
-        if (2 in state.visiblePanels) {
-            drawMemory(canvas, memoryRect, snapshot)
-            drawDisks(canvas, diskRect, snapshot)
-        }
-        if (3 in state.visiblePanels) drawNetwork(canvas, networkRect, snapshot)
-        if (4 in state.visiblePanels) {
-            if (state.showDetails) drawProcessDetail(canvas, detailRect, snapshot, state)
-            drawProcesses(canvas, processRect, snapshot, state)
-        }
+        val layout = DashboardLayoutEngine.calculate(width, height, state)
+        layout.cpu?.let { drawCpu(canvas, it, snapshot, state) }
+        layout.memory?.let { drawMemory(canvas, it, snapshot) }
+        layout.disks?.let { drawDisks(canvas, it, snapshot) }
+        layout.network?.let { drawNetwork(canvas, it, snapshot) }
+        layout.processDetail?.let { drawProcessDetail(canvas, it, snapshot, state) }
+        layout.processes?.let { drawProcesses(canvas, it, snapshot, state) }
 
         if (state.showHelp) drawHelp(canvas)
         return canvas
@@ -436,21 +406,25 @@ class DashboardRenderer(private val theme: Theme) {
 
     private fun drawHelp(canvas: Canvas) {
         val width = 58.coerceAtMost(canvas.width - 4)
-        val height = 15.coerceAtMost(canvas.height - 4)
+        val height = 18.coerceAtMost(canvas.height - 4)
         val rect = Rect((canvas.width - width) / 2, (canvas.height - height) / 2, width, height)
         canvas.box(rect, "HELP", theme, "h close")
         val help = listOf(
-            "q / Esc       Quit Pstop",
+            "q / Esc / Ctrl+C  Quit Pstop",
             "Up / Down     Select a process",
             "Page Up/Down  Move one process page",
+            "Left / Right  Ignored",
             "Enter         Toggle selected-process details",
             "s             Cycle CPU, memory, PID and name sorting",
             "r             Reverse process sorting",
             "p             Pause or resume metric sampling",
-            "1 2 3 4       Toggle dashboard panels",
+            "1             Toggle CPU",
+            "2             Toggle memory and disks",
+            "3             Toggle network",
+            "4             Toggle process area",
             "h / ?         Close this help",
             "",
-            "Pstop is read-only and never terminates processes.",
+            "Visible panels automatically fill the available space.",
         )
         help.take(height - 2).forEachIndexed { index, line ->
             canvas.text(rect.x + 2, rect.y + 1 + index, Formatters.truncate(line, rect.width - 4), theme.primary)
@@ -581,16 +555,6 @@ class DashboardRenderer(private val theme: Theme) {
         private const val HISTORY_CAPACITY = 400
         private const val MINIMUM_WIDTH = 72
         private const val MINIMUM_HEIGHT = 22
-        private const val MINIMUM_CPU_HEIGHT = 8
-        private const val MINIMUM_LOWER_HEIGHT = 14
-        private const val MINIMUM_LEFT_WIDTH = 33
-        private const val MINIMUM_RIGHT_WIDTH = 38
-        private const val MINIMUM_MEMORY_WIDTH = 16
-        private const val MINIMUM_DISK_WIDTH = 17
-        private const val MINIMUM_LEFT_TOP_HEIGHT = 8
-        private const val MINIMUM_NETWORK_HEIGHT = 6
-        private const val MINIMUM_DETAIL_HEIGHT = 5
-        private const val MINIMUM_PROCESS_HEIGHT = 8
         private const val MINIMUM_CPU_SIDEBAR_WIDTH = 23
         private const val MINIMUM_CPU_GRAPH_WIDTH = 24
         private const val CPU_GRAPH_FRAME_ALLOWANCE = 5
@@ -603,11 +567,6 @@ class DashboardRenderer(private val theme: Theme) {
         private const val CORE_PERCENT_WIDTH = 5
         private const val CORE_METER_NON_BAR_WIDTH = 11
         private const val MINIMUM_NETWORK_STATS_WIDTH = 16
-        private const val CPU_HEIGHT_RATIO = 0.33
-        private const val LEFT_WIDTH_RATIO = 0.45
-        private const val MEMORY_WIDTH_RATIO = 0.49
-        private const val LEFT_TOP_HEIGHT_RATIO = 0.58
-        private const val DETAIL_HEIGHT_RATIO = 0.31
         private const val CPU_SIDEBAR_RATIO = 0.23
         private const val NETWORK_STATS_RATIO = 0.42
         private const val BRAILLE_BASE = 0x2800

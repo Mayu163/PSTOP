@@ -4,7 +4,6 @@ import dev.pstop.cli.AppOptions
 import dev.pstop.core.model.SystemSnapshot
 import dev.pstop.system.MetricsCollector
 import org.jline.terminal.Terminal
-import org.jline.terminal.TerminalBuilder
 import org.jline.utils.InfoCmp.Capability
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -15,15 +14,15 @@ class TerminalApplication(
     private var state = ViewState()
     private var latestSnapshot: SystemSnapshot? = null
     private val resized = AtomicBoolean(true)
+    private val exitRequested = AtomicBoolean(false)
     private val topBoundaryLimiter = ConsecutiveBoundaryLimiter()
 
     fun run() {
-        TerminalBuilder.builder()
-            .system(true)
-            .jna(true)
-            .build()
+        exitRequested.set(false)
+        TerminalBackend.open()
             .use { terminal ->
                 terminal.handle(Terminal.Signal.WINCH) { resized.set(true) }
+                terminal.handle(Terminal.Signal.INT) { exitRequested.set(true) }
                 val previousAttributes = terminal.enterRawMode()
                 try {
                     terminal.puts(Capability.enter_ca_mode)
@@ -47,7 +46,7 @@ class TerminalApplication(
         var running = true
         var nextSampleAt = 0L
 
-        while (running) {
+        while (running && !exitRequested.get()) {
             val now = System.currentTimeMillis()
             if (!state.paused && now >= nextSampleAt) {
                 latestSnapshot = runCatching(collector::sample).getOrElse { exception ->
@@ -81,8 +80,9 @@ class TerminalApplication(
     }
 
     private fun handleInput(input: Int, terminal: Terminal): InputResult {
+        if (isImmediateQuitKey(input)) return InputResult(running = false)
+
         when (input) {
-            'q'.code, 'Q'.code -> return InputResult(running = false)
             'h'.code, 'H'.code, '?'.code -> {
                 topBoundaryLimiter.reset()
                 state = state.copy(showHelp = !state.showHelp)
@@ -105,26 +105,28 @@ class TerminalApplication(
             }
             '1'.code, '2'.code, '3'.code, '4'.code -> {
                 topBoundaryLimiter.reset()
-                val panel = input - '0'.code
-                val visible = state.visiblePanels.toMutableSet()
-                if (!visible.add(panel)) visible.remove(panel)
-                state = state.copy(visiblePanels = visible)
+                state = state.togglePanel(input - '0'.code)
             }
             else -> {
                 val binding = readBinding(input, terminal)
-                if (input == 27 && binding == null) return InputResult(running = false)
-                val isUpAtTop = binding == "UP" && state.selectedProcess == 0
+                if (binding == TerminalBinding.ESCAPE) return InputResult(running = false)
+                val isUpAtTop = binding == TerminalBinding.UP && state.selectedProcess == 0
                 if (!topBoundaryLimiter.allowRepaint(isUpAtTop)) return InputResult()
 
                 val visibleRows = (terminal.height / 2 - 4).coerceAtLeast(1)
                 val processCount = latestSnapshot?.processes?.size ?: 0
                 val previousState = state
                 state = when (binding) {
-                    "UP" -> moveSelection(-1, visibleRows, processCount)
-                    "DOWN" -> moveSelection(1, visibleRows, processCount)
-                    "PAGE_UP" -> moveSelection(-visibleRows, visibleRows, processCount)
-                    "PAGE_DOWN" -> moveSelection(visibleRows, visibleRows, processCount)
-                    else -> state
+                    TerminalBinding.UP -> moveSelection(-1, visibleRows, processCount)
+                    TerminalBinding.DOWN -> moveSelection(1, visibleRows, processCount)
+                    TerminalBinding.PAGE_UP -> moveSelection(-visibleRows, visibleRows, processCount)
+                    TerminalBinding.PAGE_DOWN -> moveSelection(visibleRows, visibleRows, processCount)
+                    TerminalBinding.LEFT,
+                    TerminalBinding.RIGHT,
+                    TerminalBinding.IGNORED,
+                    TerminalBinding.ESCAPE,
+                    null,
+                    -> state
                 }
                 return InputResult(repaint = state != previousState || isUpAtTop)
             }
@@ -132,24 +134,8 @@ class TerminalApplication(
         return InputResult(repaint = true)
     }
 
-    private fun readBinding(first: Int, terminal: Terminal): String? {
-        if (first != 27) return null
-        val second = terminal.reader().read(10L)
-        if (second != '['.code && second != 'O'.code) return null
-        return when (terminal.reader().read(10L)) {
-            'A'.code -> "UP"
-            'B'.code -> "DOWN"
-            '5'.code -> {
-                terminal.reader().read(10L)
-                "PAGE_UP"
-            }
-            '6'.code -> {
-                terminal.reader().read(10L)
-                "PAGE_DOWN"
-            }
-            else -> null
-        }
-    }
+    private fun readBinding(first: Int, terminal: Terminal): TerminalBinding? =
+        decodeTerminalBinding(first) { terminal.reader().read(10L) }
 
     private fun moveSelection(delta: Int, visibleRows: Int, processCount: Int): ViewState {
         if (processCount == 0) return state
@@ -170,9 +156,14 @@ class TerminalApplication(
     }
 
     companion object {
-        fun renderPlainSnapshot(snapshot: SystemSnapshot, width: Int, height: Int): String {
+        fun renderPlainSnapshot(
+            snapshot: SystemSnapshot,
+            width: Int,
+            height: Int,
+            state: ViewState = ViewState(),
+        ): String {
             val renderer = DashboardRenderer(Theme.nord(false))
-            return renderer.render(snapshot, width, height, ViewState()).renderPlain()
+            return renderer.render(snapshot, width, height, state).renderPlain()
         }
     }
 

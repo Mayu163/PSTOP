@@ -46,7 +46,7 @@ try {
     $VersionOutput = (& $IsolatedExe --version | Out-String).Trim()
     $VersionExitCode = $LASTEXITCODE
     $FirstLaunchTimer.Stop()
-    if ($VersionExitCode -ne 0 -or $VersionOutput -ne 'Pstop 1.0.3') {
+    if ($VersionExitCode -ne 0 -or $VersionOutput -ne 'Pstop 1.0.4') {
         throw "Standalone version check failed: exit=$VersionExitCode output='$VersionOutput'"
     }
 
@@ -54,7 +54,7 @@ try {
     $WarmVersionOutput = (& $IsolatedExe --version | Out-String).Trim()
     $WarmVersionExitCode = $LASTEXITCODE
     $WarmLaunchTimer.Stop()
-    if ($WarmVersionExitCode -ne 0 -or $WarmVersionOutput -ne 'Pstop 1.0.3') {
+    if ($WarmVersionExitCode -ne 0 -or $WarmVersionOutput -ne 'Pstop 1.0.4') {
         throw "Warm standalone version check failed: exit=$WarmVersionExitCode output='$WarmVersionOutput'"
     }
 
@@ -63,6 +63,23 @@ try {
     if ($SnapshotExitCode -ne 0) {
         throw "Standalone snapshot check failed with exit code $SnapshotExitCode."
     }
+
+    $EscapeCharacter = [char]27
+    $KeyboardSequence = "$EscapeCharacter[D$EscapeCharacter[Chq"
+    $InteractiveOutput = (
+        $KeyboardSequence |
+            & $IsolatedExe --no-color 2>&1 |
+            Out-String
+    )
+    $InteractiveExitCode = $LASTEXITCODE
+
+    $ControlCSequence = "$([char]3)hq"
+    $ControlCOutput = (
+        $ControlCSequence |
+            & $IsolatedExe --no-color 2>&1 |
+            Out-String
+    )
+    $ControlCExitCode = $LASTEXITCODE
 
     $ConfigBeforeRepair = @(
         Get-ChildItem -Recurse -File -Filter 'Pstop.cfg' -LiteralPath $CacheRoot
@@ -80,6 +97,16 @@ try {
     $ExtractedJvm = @(Get-ChildItem -Recurse -File -Filter 'jvm.dll' -LiteralPath $CacheRoot)
     $ExtractedJar = @(Get-ChildItem -Recurse -File -Filter 'pstop.jar' -LiteralPath $CacheRoot)
     $SystemJavaUnavailable = $null -eq (Get-Command java -ErrorAction SilentlyContinue)
+    $PackagedEntries = @()
+    if ($ExtractedJar.Count -eq 1) {
+        $JarArchive = [System.IO.Compression.ZipFile]::OpenRead($ExtractedJar[0].FullName)
+        try {
+            $PackagedEntries = @($JarArchive.Entries.FullName)
+        }
+        finally {
+            $JarArchive.Dispose()
+        }
+    }
 
     $Checks = [ordered]@{
         Version = $VersionOutput
@@ -88,10 +115,24 @@ try {
         WarmLaunchMilliseconds = $WarmLaunchTimer.ElapsedMilliseconds
         WarmVersionExitCode = $WarmVersionExitCode
         SnapshotExitCode = $SnapshotExitCode
+        InteractiveExitCode = $InteractiveExitCode
+        HorizontalArrowsIgnored = [bool](
+            $InteractiveExitCode -eq 0 -and
+            $InteractiveOutput -cmatch '\bHELP\b'
+        )
+        DeprecatedProviderWarningAbsent = [bool](
+            "$InteractiveOutput$ControlCOutput" -notmatch
+                'deprecated provider|terminal provider jna has been deprecated'
+        )
+        ControlCExitCode = $ControlCExitCode
+        ControlCQuitsBeforeFollowingKeys = [bool](
+            $ControlCExitCode -eq 0 -and
+            $ControlCOutput -cnotmatch '\bHELP\b'
+        )
         RepairExitCode = $RepairExitCode
         MissingConfigRecreated = [bool](
             $RepairExitCode -eq 0 -and
-            $RepairOutput -eq 'Pstop 1.0.3' -and
+            $RepairOutput -eq 'Pstop 1.0.4' -and
             $ExtractedConfig.Count -eq 1
         )
         SnapshotLines = $Snapshot.Count
@@ -109,6 +150,18 @@ try {
         EmbeddedConfigExtracted = $ExtractedConfig.Count -eq 1
         EmbeddedJvmExtracted = $ExtractedJvm.Count -eq 1
         EmbeddedJarExtracted = $ExtractedJar.Count -eq 1
+        JniTerminalProviderPackaged = [bool](
+            $PackagedEntries -contains
+                'META-INF/services/org/jline/terminal/provider/jni'
+        )
+        JnaTerminalProviderAbsent = [bool](
+            $PackagedEntries -notcontains
+                'META-INF/services/org/jline/terminal/provider/jna'
+        )
+        WindowsX64JniLibraryPackaged = [bool](
+            $PackagedEntries -contains
+                'org/jline/nativ/Windows/x86_64/jlinenative.dll'
+        )
         SystemJavaUnavailable = $SystemJavaUnavailable
         PowerShell = $PSVersionTable.PSVersion.ToString()
     }
@@ -116,6 +169,11 @@ try {
     $Failed = @(
         $Checks.SnapshotExitCode -ne 0
         $Checks.WarmVersionExitCode -ne 0
+        $Checks.InteractiveExitCode -ne 0
+        -not $Checks.HorizontalArrowsIgnored
+        -not $Checks.DeprecatedProviderWarningAbsent
+        $Checks.ControlCExitCode -ne 0
+        -not $Checks.ControlCQuitsBeforeFollowingKeys
         $Checks.RepairExitCode -ne 0
         -not $Checks.MissingConfigRecreated
         -not $Checks.AllPanels
@@ -127,6 +185,9 @@ try {
         -not $Checks.EmbeddedConfigExtracted
         -not $Checks.EmbeddedJvmExtracted
         -not $Checks.EmbeddedJarExtracted
+        -not $Checks.JniTerminalProviderPackaged
+        -not $Checks.JnaTerminalProviderAbsent
+        -not $Checks.WindowsX64JniLibraryPackaged
         -not $Checks.SystemJavaUnavailable
     ) -contains $true
 

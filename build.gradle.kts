@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.pstop"
-version = "1.0.3"
+version = "1.0.4"
 
 repositories {
     mavenCentral()
@@ -15,7 +15,7 @@ repositories {
 dependencies {
     implementation("com.github.oshi:oshi-core:6.6.6")
     implementation("org.jline:jline-terminal:3.27.1")
-    implementation("org.jline:jline-terminal-jna:3.27.1")
+    runtimeOnly("org.jline:jline-terminal-jni:3.27.1")
     implementation("org.slf4j:slf4j-nop:2.0.16")
 
     testImplementation(kotlin("test"))

@@ -72,9 +72,11 @@ data class AppOptions(
                   --height <rows>     Height for --once output (default 36)
 
             Interactive keys:
-              q/Esc quit   Up/Down select   PgUp/PgDn page   s change sort
-              r reverse    p pause          Enter details     h/? help
-              1-4 toggle panels
+              q/Esc/Ctrl+C quit   Up/Down select   PgUp/PgDn page
+              s change sort       r reverse         p pause
+              Enter details       h/? help
+              Left/Right ignored
+              1 CPU   2 memory/disks   3 network   4 processes
         """.trimIndent()
 
         private fun parseDimension(name: String, value: String, range: IntRange): Int {
