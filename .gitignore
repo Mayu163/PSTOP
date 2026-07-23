@@ -1,0 +1,43 @@
+# Build systems and generated output
+.gradle/
+.kotlin/
+.tooling/
+build/
+dist/
+out/
+local.properties
+*.class
+*.jar
+*.zip
+*.exe
+*.dll
+*.pdb
+
+# Logs, crash dumps, and temporary files
+*.log
+hs_err_pid*
+replay_pid*
+*.tmp
+*.bak
+*.swp
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+
+# Agent and editor state
+.agents/
+.codex/
+.idea/
+.fleet/
+.vs/
+*.iml
+.vscode/
+*.suo
+*.user
+
+# Operating-system metadata
+.DS_Store
+Desktop.ini
+Thumbs.db

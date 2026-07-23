@@ -1,0 +1,34 @@
+name: Windows build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build, test, and package
+        shell: pwsh
+        run: ./scripts/Build.ps1
+
+      - name: Upload standalone executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pstop-windows-x64
+          path: dist/Pstop.exe
+          if-no-files-found: error
