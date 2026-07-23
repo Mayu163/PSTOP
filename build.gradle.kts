@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.pstop"
-version = "0.1.0"
+version = "1.0.3"
 
 repositories {
     mavenCentral()

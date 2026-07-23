@@ -12,14 +12,14 @@ using System.Threading;
 [assembly: AssemblyCompany("Pstop contributors")]
 [assembly: AssemblyProduct("Pstop")]
 [assembly: AssemblyCopyright("Copyright © 2026 Pstop contributors")]
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: AssemblyFileVersion("0.1.0.0")]
+[assembly: AssemblyVersion("1.0.3.0")]
+[assembly: AssemblyFileVersion("1.0.3.0")]
 
 namespace Pstop.Standalone
 {
     internal static class Program
     {
-        private const string Version = "0.1.0";
+        private const string Version = "1.0.3";
         private const string PayloadResource = "Pstop.Payload.zip";
         private const string PayloadHashResource = "Pstop.Payload.sha256";
         private const string ReadyMarker = ".pstop-ready";

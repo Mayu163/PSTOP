@@ -6,7 +6,7 @@ import dev.pstop.ui.TerminalApplication
 import java.io.PrintWriter
 import kotlin.system.exitProcess
 
-private const val VERSION = "0.1.0"
+private const val VERSION = "1.0.3"
 
 fun main(args: Array<String>) {
     val options = try {

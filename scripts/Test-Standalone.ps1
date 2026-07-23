@@ -46,7 +46,7 @@ try {
     $VersionOutput = (& $IsolatedExe --version | Out-String).Trim()
     $VersionExitCode = $LASTEXITCODE
     $FirstLaunchTimer.Stop()
-    if ($VersionExitCode -ne 0 -or $VersionOutput -ne 'Pstop 0.1.0') {
+    if ($VersionExitCode -ne 0 -or $VersionOutput -ne 'Pstop 1.0.3') {
         throw "Standalone version check failed: exit=$VersionExitCode output='$VersionOutput'"
     }
 
@@ -54,7 +54,7 @@ try {
     $WarmVersionOutput = (& $IsolatedExe --version | Out-String).Trim()
     $WarmVersionExitCode = $LASTEXITCODE
     $WarmLaunchTimer.Stop()
-    if ($WarmVersionExitCode -ne 0 -or $WarmVersionOutput -ne 'Pstop 0.1.0') {
+    if ($WarmVersionExitCode -ne 0 -or $WarmVersionOutput -ne 'Pstop 1.0.3') {
         throw "Warm standalone version check failed: exit=$WarmVersionExitCode output='$WarmVersionOutput'"
     }
 
@@ -91,7 +91,7 @@ try {
         RepairExitCode = $RepairExitCode
         MissingConfigRecreated = [bool](
             $RepairExitCode -eq 0 -and
-            $RepairOutput -eq 'Pstop 0.1.0' -and
+            $RepairOutput -eq 'Pstop 1.0.3' -and
             $ExtractedConfig.Count -eq 1
         )
         SnapshotLines = $Snapshot.Count
