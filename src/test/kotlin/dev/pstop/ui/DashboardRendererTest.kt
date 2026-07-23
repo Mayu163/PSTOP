@@ -7,6 +7,8 @@ import dev.pstop.core.model.NetworkSnapshot
 import dev.pstop.core.model.ProcessSnapshot
 import dev.pstop.core.model.SystemSnapshot
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -32,14 +34,17 @@ class DashboardRendererTest {
 
     @Test
     fun `matches reference hierarchy at 130 by 41`() {
-        val lines = TerminalApplication.renderPlainSnapshot(snapshot(), 130, 41)
+        val snapshot = snapshot()
+        val expectedTime = DateTimeFormatter.ofPattern("HH:mm:ss")
+            .format(snapshot.capturedAt.atZone(ZoneId.systemDefault()))
+        val lines = TerminalApplication.renderPlainSnapshot(snapshot, 130, 41)
             .lines()
             .dropLastWhile(String::isEmpty)
 
         assertEquals(41, lines.size)
         assertTrue(lines.all { it.length <= 130 })
         assertContains(lines[0], "1 cpu")
-        assertContains(lines[0], "22:04:05")
+        assertContains(lines[0], expectedTime)
         assertContains(lines[13], "2 mem")
         assertContains(lines[13], "disks")
         assertContains(lines[13], "powershell.exe")
