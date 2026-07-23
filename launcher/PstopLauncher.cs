@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 
@@ -22,6 +21,7 @@ namespace Pstop.Standalone
     {
         private const string Version = "0.1.0";
         private const string PayloadResource = "Pstop.Payload.zip";
+        private const string PayloadHashResource = "Pstop.Payload.sha256";
         private const string ReadyMarker = ".pstop-ready";
 
         [STAThread]
@@ -29,7 +29,7 @@ namespace Pstop.Standalone
         {
             try
             {
-                string payloadHash = ComputePayloadHash();
+                string payloadHash = ReadPayloadHash();
                 string cacheRoot = ResolveCacheRoot();
                 string runtimeDirectory = Path.Combine(
                     cacheRoot,
@@ -84,19 +84,36 @@ namespace Pstop.Standalone
             return Path.Combine(localApplicationData, "Pstop", "runtime");
         }
 
-        private static string ComputePayloadHash()
+        private static string ReadPayloadHash()
         {
-            using (Stream payload = OpenPayload())
-            using (SHA256 sha256 = SHA256.Create())
+            Stream resource = Assembly.GetExecutingAssembly().GetManifestResourceStream(PayloadHashResource);
+            if (resource == null)
             {
-                byte[] hash = sha256.ComputeHash(payload);
-                StringBuilder value = new StringBuilder(hash.Length * 2);
-                foreach (byte item in hash)
-                {
-                    value.Append(item.ToString("x2", CultureInfo.InvariantCulture));
-                }
-                return value.ToString();
+                throw new InvalidOperationException("The embedded Pstop payload hash is missing.");
             }
+
+            string hash;
+            using (resource)
+            using (StreamReader reader = new StreamReader(resource, Encoding.ASCII, false))
+            {
+                hash = reader.ReadToEnd().Trim().ToLowerInvariant();
+            }
+
+            if (hash.Length != 64)
+            {
+                throw new InvalidDataException("The embedded Pstop payload hash is invalid.");
+            }
+            foreach (char character in hash)
+            {
+                bool hexadecimal =
+                    (character >= '0' && character <= '9') ||
+                    (character >= 'a' && character <= 'f');
+                if (!hexadecimal)
+                {
+                    throw new InvalidDataException("The embedded Pstop payload hash is invalid.");
+                }
+            }
+            return hash;
         }
 
         private static Stream OpenPayload()

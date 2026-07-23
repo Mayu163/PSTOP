@@ -48,7 +48,7 @@ class DashboardRendererTest {
     }
 
     @Test
-    fun `shows all 32 cpu threads by expanding rows on a large terminal`() {
+    fun `keeps reference cpu proportion and shows 32 threads in columns`() {
         val snapshot = snapshotWithCoreCount(32)
         val lines = TerminalApplication.renderPlainSnapshot(snapshot, 240, 80)
             .lines()
@@ -63,17 +63,26 @@ class DashboardRendererTest {
             )
         }
         val memoryHeaderRow = lines.indexOfFirst { "2 mem" in it }
-        assertTrue(memoryHeaderRow >= 37, "CPU panel did not expand for 32 thread rows")
+        assertTrue(memoryHeaderRow in 24..27, "CPU panel must stay close to one third of the terminal")
+        assertTrue(
+            lines.any {
+                Regex("""C0\s""").containsMatchIn(it) &&
+                    Regex("""C8\s""").containsMatchIn(it) &&
+                    Regex("""C16\s""").containsMatchIn(it) &&
+                    Regex("""C24\s""").containsMatchIn(it)
+            },
+            "Expected 32 threads to use four columns of eight",
+        )
     }
 
     @Test
-    fun `flows cpu threads into columns when vertical room is constrained`() {
-        val snapshot = snapshotWithCoreCount(32)
-        val lines = TerminalApplication.renderPlainSnapshot(snapshot, 180, 45)
+    fun `starts a second cpu column after eight threads`() {
+        val snapshot = snapshotWithCoreCount(10)
+        val lines = TerminalApplication.renderPlainSnapshot(snapshot, 130, 41)
             .lines()
             .dropLastWhile(String::isEmpty)
 
-        repeat(32) { core ->
+        repeat(10) { core ->
             assertTrue(
                 lines.any { Regex("""C$core\s""").containsMatchIn(it) },
                 "Expected CPU thread C$core to be visible",
@@ -82,10 +91,37 @@ class DashboardRendererTest {
         assertTrue(
             lines.any {
                 Regex("""C0\s""").containsMatchIn(it) &&
-                    Regex("""C16\s""").containsMatchIn(it)
+                    Regex("""C5\s""").containsMatchIn(it)
             },
-            "Expected the 32 thread meters to use multiple columns",
+            "Expected threads above eight to use a second column",
         )
+    }
+
+    @Test
+    fun `hides cpu threads that cannot fit in a minimum terminal`() {
+        val lines = TerminalApplication.renderPlainSnapshot(snapshotWithCoreCount(32), 72, 22)
+            .lines()
+            .dropLastWhile(String::isEmpty)
+
+        assertTrue(lines.any { Regex("""C0\s""").containsMatchIn(it) })
+        assertTrue(lines.any { Regex("""C3\s""").containsMatchIn(it) })
+        assertTrue(lines.none { Regex("""C4\s""").containsMatchIn(it) })
+    }
+
+    @Test
+    fun `renders requested detailed Windows memory fields separately`() {
+        val output = TerminalApplication.renderPlainSnapshot(snapshot(), 130, 41)
+
+        assertContains(output, "Total:")
+        assertContains(output, "Used:")
+        assertContains(output, "Paged Pool:")
+        assertContains(output, "Non-paged Pool:")
+        assertContains(output, "Committed:")
+        assertContains(output, "Cached:")
+        assertContains(output, "512 MiB")
+        assertContains(output, "256 MiB")
+        assertContains(output, "12.0 GiB")
+        assertContains(output, "4.00 GiB")
     }
 
     @Test
@@ -120,7 +156,17 @@ class DashboardRendererTest {
             coreLoadsPercent = listOf(12.0, 31.0, 7.0, 65.0, 18.0, 44.0, 5.0, 28.0),
             temperatureCelsius = 46.0,
         ),
-        memory = MemorySnapshot(16L shl 30, 8L shl 30, 8L shl 30, 4L shl 30, 1L shl 30),
+        memory = MemorySnapshot(
+            totalBytes = 16L shl 30,
+            usedBytes = 8L shl 30,
+            availableBytes = 8L shl 30,
+            swapTotalBytes = 4L shl 30,
+            swapUsedBytes = 1L shl 30,
+            pagedPoolBytes = 512L shl 20,
+            nonPagedPoolBytes = 256L shl 20,
+            committedBytes = 12L shl 30,
+            cachedBytes = 4L shl 30,
+        ),
         disks = listOf(DiskSnapshot("C:", "C:\\", 1_000_000, 500_000)),
         network = NetworkSnapshot("Ethernet", "192.168.1.2", 10_000, 2_000, 1_000_000, 500_000),
         processes = listOf(

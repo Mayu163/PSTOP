@@ -42,10 +42,20 @@ try {
     Push-Location -LiteralPath $IsolatedRoot
     $LocationPushed = $true
 
+    $FirstLaunchTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $VersionOutput = (& $IsolatedExe --version | Out-String).Trim()
     $VersionExitCode = $LASTEXITCODE
+    $FirstLaunchTimer.Stop()
     if ($VersionExitCode -ne 0 -or $VersionOutput -ne 'Pstop 0.1.0') {
         throw "Standalone version check failed: exit=$VersionExitCode output='$VersionOutput'"
+    }
+
+    $WarmLaunchTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $WarmVersionOutput = (& $IsolatedExe --version | Out-String).Trim()
+    $WarmVersionExitCode = $LASTEXITCODE
+    $WarmLaunchTimer.Stop()
+    if ($WarmVersionExitCode -ne 0 -or $WarmVersionOutput -ne 'Pstop 0.1.0') {
+        throw "Warm standalone version check failed: exit=$WarmVersionExitCode output='$WarmVersionOutput'"
     }
 
     $Snapshot = @(& $IsolatedExe --once --no-color --width 130 --height 41)
@@ -74,6 +84,9 @@ try {
     $Checks = [ordered]@{
         Version = $VersionOutput
         VersionExitCode = $VersionExitCode
+        FirstLaunchMilliseconds = $FirstLaunchTimer.ElapsedMilliseconds
+        WarmLaunchMilliseconds = $WarmLaunchTimer.ElapsedMilliseconds
+        WarmVersionExitCode = $WarmVersionExitCode
         SnapshotExitCode = $SnapshotExitCode
         RepairExitCode = $RepairExitCode
         MissingConfigRecreated = [bool](
@@ -102,6 +115,7 @@ try {
 
     $Failed = @(
         $Checks.SnapshotExitCode -ne 0
+        $Checks.WarmVersionExitCode -ne 0
         $Checks.RepairExitCode -ne 0
         -not $Checks.MissingConfigRecreated
         -not $Checks.AllPanels

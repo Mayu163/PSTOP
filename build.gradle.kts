@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 plugins {
     kotlin("jvm") version "2.0.21"
     application
@@ -175,14 +177,42 @@ val standalonePayload = tasks.register<Zip>("standalonePayload") {
 }
 
 val standaloneOutputDirectory = layout.buildDirectory.dir("standalone-output")
+val standalonePayloadHashFile = layout.buildDirectory.file("standalone-payload/pstop-payload.sha256")
+
+val standalonePayloadHash = tasks.register("standalonePayloadHash") {
+    group = "distribution"
+    description = "Calculates the embedded payload identity once at build time."
+    dependsOn(standalonePayload)
+
+    val payload = standalonePayload.flatMap { it.archiveFile }
+    inputs.file(payload)
+    outputs.file(standalonePayloadHashFile)
+
+    doLast {
+        val digest = MessageDigest.getInstance("SHA-256")
+        payload.get().asFile.inputStream().buffered().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val hash = digest.digest().joinToString("") { "%02x".format(it) }
+        val output = standalonePayloadHashFile.get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(hash, Charsets.US_ASCII)
+    }
+}
 
 val createStandaloneExe = tasks.register<Exec>("createStandaloneExe") {
     group = "distribution"
     description = "Builds the true single-file self-extracting Pstop.exe."
-    dependsOn(standalonePayload)
+    dependsOn(standalonePayloadHash)
 
     val executable = standaloneOutputDirectory.map { it.file("Pstop.exe") }
     inputs.file(standalonePayload.flatMap { it.archiveFile })
+    inputs.file(standalonePayloadHashFile)
     inputs.file(layout.projectDirectory.file("launcher/PstopLauncher.cs"))
     inputs.file(layout.projectDirectory.file("launcher/PstopLauncher.manifest"))
     outputs.file(executable)
@@ -200,6 +230,7 @@ val createStandaloneExe = tasks.register<Exec>("createStandaloneExe") {
         }
 
         val payload = standalonePayload.get().archiveFile.get().asFile
+        val payloadHash = standalonePayloadHashFile.get().asFile
         val source = layout.projectDirectory.file("launcher/PstopLauncher.cs").asFile
         val manifest = layout.projectDirectory.file("launcher/PstopLauncher.manifest").asFile
         commandLine(
@@ -214,6 +245,7 @@ val createStandaloneExe = tasks.register<Exec>("createStandaloneExe") {
             "/win32manifest:$manifest",
             "/reference:$compressionAssembly",
             "/resource:$payload,Pstop.Payload.zip",
+            "/resource:$payloadHash,Pstop.Payload.sha256",
             source,
         )
     }

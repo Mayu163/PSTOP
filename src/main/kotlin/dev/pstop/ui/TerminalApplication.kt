@@ -15,6 +15,7 @@ class TerminalApplication(
     private var state = ViewState()
     private var latestSnapshot: SystemSnapshot? = null
     private val resized = AtomicBoolean(true)
+    private val topBoundaryLimiter = ConsecutiveBoundaryLimiter()
 
     fun run() {
         TerminalBuilder.builder()
@@ -72,21 +73,38 @@ class TerminalApplication(
             val waitMillis = if (state.paused) 100L else (nextSampleAt - System.currentTimeMillis()).coerceIn(10L, 100L)
             val input = terminal.reader().read(waitMillis)
             if (input >= 0) {
-                running = handleInput(input, terminal)
-                resized.set(true)
+                val result = handleInput(input, terminal)
+                running = result.running
+                if (result.repaint) resized.set(true)
             }
         }
     }
 
-    private fun handleInput(input: Int, terminal: Terminal): Boolean {
+    private fun handleInput(input: Int, terminal: Terminal): InputResult {
         when (input) {
-            'q'.code, 'Q'.code -> return false
-            'h'.code, 'H'.code, '?'.code -> state = state.copy(showHelp = !state.showHelp)
-            10, 13 -> state = state.copy(showDetails = !state.showDetails)
-            'p'.code, 'P'.code -> state = state.copy(paused = !state.paused)
-            's'.code, 'S'.code -> state = state.copy(processSort = state.processSort.next())
-            'r'.code, 'R'.code -> state = state.copy(reverseSort = !state.reverseSort)
+            'q'.code, 'Q'.code -> return InputResult(running = false)
+            'h'.code, 'H'.code, '?'.code -> {
+                topBoundaryLimiter.reset()
+                state = state.copy(showHelp = !state.showHelp)
+            }
+            10, 13 -> {
+                topBoundaryLimiter.reset()
+                state = state.copy(showDetails = !state.showDetails)
+            }
+            'p'.code, 'P'.code -> {
+                topBoundaryLimiter.reset()
+                state = state.copy(paused = !state.paused)
+            }
+            's'.code, 'S'.code -> {
+                topBoundaryLimiter.reset()
+                state = state.copy(processSort = state.processSort.next())
+            }
+            'r'.code, 'R'.code -> {
+                topBoundaryLimiter.reset()
+                state = state.copy(reverseSort = !state.reverseSort)
+            }
             '1'.code, '2'.code, '3'.code, '4'.code -> {
+                topBoundaryLimiter.reset()
                 val panel = input - '0'.code
                 val visible = state.visiblePanels.toMutableSet()
                 if (!visible.add(panel)) visible.remove(panel)
@@ -94,9 +112,13 @@ class TerminalApplication(
             }
             else -> {
                 val binding = readBinding(input, terminal)
-                if (input == 27 && binding == null) return false
+                if (input == 27 && binding == null) return InputResult(running = false)
+                val isUpAtTop = binding == "UP" && state.selectedProcess == 0
+                if (!topBoundaryLimiter.allowRepaint(isUpAtTop)) return InputResult()
+
                 val visibleRows = (terminal.height / 2 - 4).coerceAtLeast(1)
                 val processCount = latestSnapshot?.processes?.size ?: 0
+                val previousState = state
                 state = when (binding) {
                     "UP" -> moveSelection(-1, visibleRows, processCount)
                     "DOWN" -> moveSelection(1, visibleRows, processCount)
@@ -104,9 +126,10 @@ class TerminalApplication(
                     "PAGE_DOWN" -> moveSelection(visibleRows, visibleRows, processCount)
                     else -> state
                 }
+                return InputResult(repaint = state != previousState || isUpAtTop)
             }
         }
-        return true
+        return InputResult(repaint = true)
     }
 
     private fun readBinding(first: Int, terminal: Terminal): String? {
@@ -152,4 +175,9 @@ class TerminalApplication(
             return renderer.render(snapshot, width, height, ViewState()).renderPlain()
         }
     }
+
+    private data class InputResult(
+        val running: Boolean = true,
+        val repaint: Boolean = false,
+    )
 }

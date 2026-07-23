@@ -18,6 +18,10 @@ data class MemorySnapshot(
     val availableBytes: Long,
     val swapTotalBytes: Long,
     val swapUsedBytes: Long,
+    val pagedPoolBytes: Long = 0L,
+    val nonPagedPoolBytes: Long = 0L,
+    val committedBytes: Long = 0L,
+    val cachedBytes: Long = 0L,
 )
 
 data class DiskSnapshot(

@@ -43,6 +43,7 @@ class OshiMetricsCollector(private val processLimit: Int = 200) : MetricsCollect
         val virtualMemory = memory.virtualMemory
         val totalMemory = memory.total
         val availableMemory = memory.available
+        val memoryDetails = queryWindowsMemoryDetails()
 
         val networkInterfaces = hardware.networkIFs
             .onEach(NetworkIF::updateAttributes)
@@ -125,6 +126,10 @@ class OshiMetricsCollector(private val processLimit: Int = 200) : MetricsCollect
                 availableBytes = availableMemory,
                 swapTotalBytes = virtualMemory.swapTotal,
                 swapUsedBytes = virtualMemory.swapUsed,
+                pagedPoolBytes = memoryDetails?.pagedPoolBytes ?: 0L,
+                nonPagedPoolBytes = memoryDetails?.nonPagedPoolBytes ?: 0L,
+                committedBytes = memoryDetails?.committedBytes ?: 0L,
+                cachedBytes = memoryDetails?.cachedBytes ?: 0L,
             ),
             disks = File.listRoots().orEmpty().map { root ->
                 DiskSnapshot(

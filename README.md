@@ -6,10 +6,11 @@ using a Windows-focused Kotlin implementation.
 
 Pstop currently displays:
 
-- a full-width CPU history with adaptive per-core load meters that expand into
-  additional rows and columns, plus frequency, uptime, and temperature when
-  Windows exposes a sensor;
-- physical/page memory plus compact mounted-drive usage and aggregate disk I/O;
+- a full-width CPU history that preserves the reference dashboard ratio, with
+  up to eight core meters per column and additional columns for larger CPUs;
+- detailed Windows memory totals for used, paged pool, non-paged pool,
+  committed, and cached memory, plus compact mounted-drive usage and aggregate
+  disk I/O;
 - mirrored download/upload histories, current rates, peaks, totals, interface,
   and address;
 - a selected-process detail card with state, elapsed time, parent PID, memory,
@@ -75,7 +76,9 @@ launches reuse that cache. A changed Pstop payload automatically gets a new
 cache directory, so different releases cannot accidentally share runtime
 files. If a required cached CFG, JAR, JVM, or executable is missing, Pstop
 repairs the cache from its embedded payload. `PSTOP_CACHE_DIR` can override the
-cache location for controlled deployments and automated tests.
+cache location for controlled deployments and automated tests. The payload
+identity is calculated during the build and embedded as a small resource, so
+startup does not rescan the complete application payload.
 
 The other two outputs are inspectable folder distributions. In particular,
 `dist/exe/Pstop/Pstop.exe` is the launcher generated directly by `jpackage`;

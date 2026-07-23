@@ -47,13 +47,7 @@ class DashboardRenderer(private val theme: Theme) {
         networkDownloadHistory.add(snapshot.network?.downloadBytesPerSecond ?: 0L)
         networkUploadHistory.add(snapshot.network?.uploadBytesPerSecond ?: 0L)
 
-        val proportionalCpuHeight = (height * CPU_HEIGHT_RATIO).roundToInt()
-        val coreDrivenCpuHeight = snapshot.cpu.coreLoadsPercent
-            .takeIf { it.isNotEmpty() }
-            ?.size
-            ?.plus(CPU_CORE_VERTICAL_CHROME)
-            ?: MINIMUM_CPU_HEIGHT
-        val cpuHeight = maxOf(proportionalCpuHeight, coreDrivenCpuHeight)
+        val cpuHeight = (height * CPU_HEIGHT_RATIO).roundToInt()
             .coerceIn(MINIMUM_CPU_HEIGHT, height - MINIMUM_LOWER_HEIGHT)
         val lowerHeight = height - cpuHeight
         val leftWidth = (width * LEFT_WIDTH_RATIO).roundToInt()
@@ -114,7 +108,8 @@ class DashboardRenderer(private val theme: Theme) {
         canvas.box(rect, "1 cpu   menu", theme, "$refreshState +")
         drawCenteredBorderLabel(canvas, rect, time)
 
-        val coreRows = (rect.height - CPU_CORE_VERTICAL_CHROME).coerceAtLeast(1)
+        val coreRows = (rect.height - CPU_CORE_VERTICAL_CHROME)
+            .coerceIn(1, MAXIMUM_CORE_ROWS_PER_COLUMN)
         val coreLoads = snapshot.cpu.coreLoadsPercent
         val requestedCoreColumns = if (coreLoads.isEmpty()) {
             1
@@ -240,7 +235,6 @@ class DashboardRenderer(private val theme: Theme) {
     private fun drawMemory(canvas: Canvas, rect: Rect, snapshot: SystemSnapshot) {
         val memory = snapshot.memory
         val usedPercent = percent(memory.usedBytes, memory.totalBytes)
-        val availablePercent = percent(memory.availableBytes, memory.totalBytes)
         canvas.box(rect, "2 mem", theme)
 
         val x = rect.x + 2
@@ -253,27 +247,32 @@ class DashboardRenderer(private val theme: Theme) {
             drawBar(canvas, x + 5, y++, (width - 5).coerceAtLeast(3), usedPercent, loadStyle(usedPercent))
         }
         if (y < rect.bottom) {
-            statLine(canvas, x, y++, width, "Available:", Formatters.bytes(memory.availableBytes), theme.primary)
+            statLine(canvas, x, y++, width, "Paged Pool:", Formatters.bytes(memory.pagedPoolBytes), theme.warning)
         }
         if (y < rect.bottom) {
-            canvas.text(x, y, "${availablePercent.roundToInt()}%", theme.download)
-            drawBar(canvas, x + 5, y++, (width - 5).coerceAtLeast(3), availablePercent, theme.download)
-        }
-        if (memory.swapTotalBytes > 0 && y < rect.bottom) {
-            val swapPercent = percent(memory.swapUsedBytes, memory.swapTotalBytes)
             statLine(
                 canvas,
                 x,
                 y++,
                 width,
-                "Page:",
-                "${Formatters.bytes(memory.swapUsedBytes)} / ${Formatters.bytes(memory.swapTotalBytes)}",
+                "Non-paged Pool:",
+                Formatters.bytes(memory.nonPagedPoolBytes),
+                theme.warning,
+            )
+        }
+        if (y < rect.bottom) {
+            statLine(
+                canvas,
+                x,
+                y++,
+                width,
+                "Committed:",
+                Formatters.bytes(memory.committedBytes),
                 theme.primary,
             )
-            if (y < rect.bottom) {
-                canvas.text(x, y, "${swapPercent.roundToInt()}%", theme.warning)
-                drawBar(canvas, x + 5, y, (width - 5).coerceAtLeast(3), swapPercent, loadStyle(swapPercent))
-            }
+        }
+        if (y < rect.bottom) {
+            statLine(canvas, x, y, width, "Cached:", Formatters.bytes(memory.cachedBytes), theme.download)
         }
     }
 
@@ -599,6 +598,7 @@ class DashboardRenderer(private val theme: Theme) {
         private const val CPU_SIDEBAR_HORIZONTAL_CHROME = 4
         private const val MINIMUM_CORE_COLUMN_WIDTH = 14
         private const val CORE_COLUMN_GAP = 1
+        private const val MAXIMUM_CORE_ROWS_PER_COLUMN = 8
         private const val CORE_LABEL_WIDTH = 4
         private const val CORE_PERCENT_WIDTH = 5
         private const val CORE_METER_NON_BAR_WIDTH = 11
